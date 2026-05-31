@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: parking-now
+  profiles:
+    active: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+  jackson:
+    default-property-inclusion: always
+
+server:
+  port: 8080
+
+api:
+  predict:
+    url: ${PREDICT_SERVICE_URL:http://localhost:8081}
