@@ -18,7 +18,7 @@ public class ParkingSearchRequest {
     @NotNull(message = "경도는 필수입니다.")
     private Double lng;
 
-    private Integer radius = 700;       // 기본 반경 500m
+    private Integer radius = 1000;       // 기본 반경 1000m
 
     private String arrivalTime;         // 도착 예정 시간 (ISO 8601)
 
