@@ -8,6 +8,9 @@ import lombok.Builder;
 import lombok.Getter;
 import java.util.List;
 
+import com.parking.dto.response.ReviewResponse;
+import java.util.List;
+
 @Getter
 @Builder
 public class ParkingDetailResponse {
@@ -20,6 +23,7 @@ public class ParkingDetailResponse {
     private Integer bscPrkCrg;      // 기본 요금
     private Integer bscPrkHr;       // 기본 요금 적용 시간 (분)
     private Integer addPrkCrg;      // 추가 요금
+    private Double distanceM;  // 목적지로부터 거리 (m)
 
     // 운영 시간
     private String  wdOperBgngTm;
@@ -38,7 +42,12 @@ public class ParkingDetailResponse {
     @Getter
     @Builder
     public static class CongestionInfo {
-        private Integer currentRate;        // 현재 혼잡률 (%)
+        private Integer currentRate;        // 현재 혼잡률 (%) (얘가 여유공간 반대)
         private List<Integer> hourly;       // 시간대별 평균 잔여 공간 (24개)
     }
+
+    // 리뷰 관련 필드 추가
+    private Double avgRating;      // 평균 평점
+    private Long reviewCount;      // 리뷰 수
+    private List<ReviewResponse> recentReviews;  // 최신 리뷰 3개
 }

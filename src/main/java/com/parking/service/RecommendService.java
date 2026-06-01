@@ -1,11 +1,6 @@
-/**
- * 대체 주차장 추천 비즈니스 로직
- * 반경 자동 확장 (500m → 1km → 2km)
- * 추천 점수 = 잔여율 40% + 거리 역산 35% + 요금 역산 25%
- * 대상 : hasRealtime=true 주차장만
- */
 package com.parking.service;
 
+import com.parking.adapter.RecommendServiceAdapter;
 import com.parking.domain.ParkingInfo;
 import com.parking.domain.ParkingRealtime;
 import com.parking.dto.request.RecommendRequest;
@@ -17,10 +12,7 @@ import com.parking.repository.ParkingRealtimeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,11 +21,9 @@ public class RecommendService {
 
     private final ParkingInfoRepository parkingInfoRepository;
     private final ParkingRealtimeRepository parkingRealtimeRepository;
+    private final RecommendServiceAdapter recommendServiceAdapter;
 
-    // 도보 속도 (m/분)
     private static final double WALKING_SPEED = 67.0;
-
-    // 반경 확장 단계 (m)
     private static final int[] RADIUS_STEPS = {500, 1000, 2000};
 
     // 대체 주차장 추천 (기능 5)
@@ -43,15 +33,46 @@ public class RecommendService {
                 ? request.getExcludePkltCds()
                 : new ArrayList<>();
 
-        // 반경 자동 확장하며 후보 탐색
-        List<RecommendResponse.AlternativeItem> alternatives = new ArrayList<>();
+        // AI 서버 호출
+        List<Map<String, Object>> aiResults = recommendServiceAdapter.requestRecommend(
+                request.getLat(), request.getLng(),
+                request.getArrivalTime(), excludeIds);
 
-        for (int radius : RADIUS_STEPS) {
-            alternatives = findAndScore(
-                    request.getLat(), request.getLng(), radius, excludeIds);
-
-            if (!alternatives.isEmpty()) break;
+        if (aiResults == null || aiResults.isEmpty()) {
+            throw new ParkingException(ErrorCode.NO_ALTERNATIVES);
         }
+
+        // AI 결과를 기반으로 주차장 정보 조회 및 응답 생성
+        List<RecommendResponse.AlternativeItem> alternatives = aiResults.stream()
+                .map(result -> {
+                    String pkltCd = (String) result.get("pkltCd");
+                    Integer recommendScore = (Integer) result.get("recommendScore");
+
+                    return parkingInfoRepository.findByPkltCd(pkltCd).map(info -> {
+                        Optional<ParkingRealtime> latest = parkingRealtimeRepository
+                                .findTopByPkltCdOrderByCollectedAtDesc(pkltCd);
+
+                        int remaining = latest.map(r -> r.getRemaining() != null
+                                ? r.getRemaining() : 0).orElse(0);
+                        double distanceM = calcDistance(
+                                request.getLat(), request.getLng(),
+                                info.getLat(), info.getLng());
+                        int walkingMinutes = (int) Math.ceil(distanceM / WALKING_SPEED);
+
+                        return RecommendResponse.AlternativeItem.builder()
+                                .pkltCd(pkltCd)
+                                .name(info.getPkltNm())
+                                .distanceM(distanceM)
+                                .walkingMinutes(walkingMinutes)
+                                .remaining(remaining)
+                                .bscPrkCrg(info.getBscPrkCrg())
+                                .recommendScore(recommendScore)
+                                .reason(buildReason(remaining, walkingMinutes, info.getBscPrkCrg()))
+                                .build();
+                    }).orElse(null);
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         if (alternatives.isEmpty()) {
             throw new ParkingException(ErrorCode.NO_ALTERNATIVES);
@@ -60,70 +81,6 @@ public class RecommendService {
         return RecommendResponse.builder()
                 .alternatives(alternatives)
                 .build();
-    }
-
-    // 후보 탐색 + 점수 계산 (hasRealtime=true만)
-    private List<RecommendResponse.AlternativeItem> findAndScore(
-            Double lat, Double lng, int radius, List<String> excludeIds) {
-
-        // parking_info 후보 조회
-        List<ParkingInfo> infoList = excludeIds.isEmpty()
-                ? parkingInfoRepository.findWithinRadius(lat, lng, radius)
-                : parkingInfoRepository.findAlternativesWithinRadius(lat, lng, radius, excludeIds);
-
-        List<RecommendResponse.AlternativeItem> results = new ArrayList<>();
-
-        for (ParkingInfo info : infoList) {
-            Optional<ParkingRealtime> latest = parkingRealtimeRepository
-                    .findTopByPkltCdOrderByCollectedAtDesc(info.getPkltCd());
-
-            // 만차이면 제외
-            if (latest.isPresent() && Boolean.TRUE.equals(latest.get().getIsFull())) continue;
-
-            int remaining = latest.map(r -> r.getRemaining() != null ? r.getRemaining() : 0).orElse(0);
-            double distanceM = calcDistance(lat, lng, info.getLat(), info.getLng());
-            int score = calcScore(remaining, info.getTpkct(), distanceM, info.getBscPrkCrg(), radius);
-            int walkingMinutes = (int) Math.ceil(distanceM / WALKING_SPEED);
-
-            results.add(RecommendResponse.AlternativeItem.builder()
-                    .pkltCd(info.getPkltCd())
-                    .name(info.getPkltNm())
-                    .distanceM(distanceM)
-                    .walkingMinutes(walkingMinutes)
-                    .remaining(remaining)
-                    .bscPrkCrg(info.getBscPrkCrg())
-                    .recommendScore(score)
-                    .reason(buildReason(remaining, walkingMinutes, info.getBscPrkCrg()))
-                    .build());
-        }
-
-        // 점수 높은 순 정렬
-        return results.stream()
-                .sorted(Comparator.comparingInt(RecommendResponse.AlternativeItem::getRecommendScore).reversed())
-                .limit(5)
-                .collect(Collectors.toList());
-    }
-
-    // 추천 점수 계산
-    private int calcScore(int remaining, Integer totalSpots, double distanceM,
-                          Integer bscPrkCrg, int maxRadius) {
-
-        // 잔여율 점수 (0~40)
-        double remainScore = 0;
-        if (totalSpots != null && totalSpots > 0) {
-            remainScore = Math.min((double) remaining / totalSpots, 1.0) * 40;
-        }
-
-        // 거리 역산 점수 (0~35)
-        double distScore = Math.max(0, (1.0 - distanceM / maxRadius)) * 35;
-
-        // 요금 역산 점수 (0~25)
-        double priceScore = 25;
-        if (bscPrkCrg != null && bscPrkCrg > 0) {
-            priceScore = Math.max(0, (1.0 - (double) bscPrkCrg / 2000)) * 25;
-        }
-
-        return (int) (remainScore + distScore + priceScore);
     }
 
     // 추천 이유 생성

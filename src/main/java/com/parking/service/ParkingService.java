@@ -1,4 +1,3 @@
-
 /**
  * 주차장 검색 · 상세 조회 비즈니스 로직
  * parking_info · parking_static 두 테이블 결과를 합쳐서 반환
@@ -6,23 +5,24 @@
  */
 package com.parking.service;
 
+import com.parking.adapter.PredictServiceAdapter;
 import com.parking.domain.ParkingInfo;
 import com.parking.domain.ParkingStatic;
 import com.parking.dto.request.ParkingSearchRequest;
 import com.parking.dto.response.ParkingDetailResponse;
 import com.parking.dto.response.ParkingListItemDto;
+import com.parking.dto.response.ReviewResponse;
 import com.parking.exception.ErrorCode;
 import com.parking.exception.ParkingException;
 import com.parking.repository.ParkingInfoRepository;
 import com.parking.repository.ParkingRealtimeRepository;
 import com.parking.repository.ParkingStaticRepository;
+import com.parking.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +32,8 @@ public class ParkingService {
     private final ParkingInfoRepository parkingInfoRepository;
     private final ParkingRealtimeRepository parkingRealtimeRepository;
     private final ParkingStaticRepository parkingStaticRepository;
+    private final ReviewRepository reviewRepository;
+    private final PredictServiceAdapter predictServiceAdapter;
 
     // 목적지 주변 주차장 검색 (기능 1·2)
     public List<ParkingListItemDto> searchParking(ParkingSearchRequest request) {
@@ -61,7 +63,7 @@ public class ParkingService {
                     .wdOperEndTm(info.getWdOperEndTm())
                     .weOperBgngTm(info.getWeOperBgngTm())
                     .weOperEndTm(info.getWeOperEndTm())
-                    .distanceM(calcDistance(request.getLat(), request.getLng(), info.getLat(), info.getLng())) // ← 추가
+                    .distanceM(calcDistance(request.getLat(), request.getLng(), info.getLat(), info.getLng()))
                     .hasRealtime(true);
 
             // 실시간 잔여 공간 붙이기
@@ -72,26 +74,40 @@ public class ParkingService {
                             .isFull(rt.getIsFull())
                             .nowPrkVhclCnt(rt.getNowPrkVhclCnt()));
 
-            // 도착 예정 시간 있으면 예측값 추가(도착 예정 시간대에 혼잡도 예측) -> AI 모델 연결 시 여기 수정
-            if (request.getArrivalTime() != null) {
-                List<Object[]> avgRows = parkingRealtimeRepository
-                        .findAvgByDayOfWeekAndHour(info.getPkltCd(), request.getArrivalTime());
-
-                int predictedRemaining = avgRows.stream()
-                        .filter(row -> ((Number) row[0]).intValue() ==
-                                LocalDateTime.parse(request.getArrivalTime()).getHour())
-                        .map(row -> ((Number) row[1]).intValue())
-                        .findFirst()
-                        .orElse(-1);
-
-                String congestionLevel = calcCongestionLevel(info.getTpkct(), predictedRemaining);
-                builder.predictedRemaining(predictedRemaining)
-                        .congestionLevel(congestionLevel)
-                        .recommendTransit("HIGH".equals(congestionLevel));
-            }
+            // 평균 평점 붙이기
+            builder.avgRating(reviewRepository.findAvgRatingByPkltCd(info.getPkltCd()) != null
+                    ? Math.round(reviewRepository.findAvgRatingByPkltCd(info.getPkltCd()) * 10) / 10.0
+                    : 0.0);
 
             return builder.build();
         }).collect(Collectors.toList());
+
+        // AI 서버 호출해서 예측값 붙이기
+        if (request.getArrivalTime() != null && !infoList.isEmpty()) {
+            List<String> pkltCds = infoList.stream()
+                    .map(ParkingInfo::getPkltCd)
+                    .collect(Collectors.toList());
+
+            List<Map<String, Object>> predictions = predictServiceAdapter
+                    .requestPrediction(pkltCds, request.getArrivalTime());
+
+            Map<String, Map<String, Object>> predictionMap = predictions.stream()
+                    .collect(Collectors.toMap(
+                            p -> (String) p.get("pkltCd"),
+                            p -> p
+                    ));
+
+            infoResults.forEach(dto -> {
+                Map<String, Object> pred = predictionMap.get(dto.getPkltCd());
+                if (pred != null) {
+                    Integer predictedRemaining = (Integer) pred.get("predictedRemaining");
+                    String congestionLevel = (String) pred.get("congestionLevel");
+                    dto.setPredictedRemaining(predictedRemaining);
+                    dto.setCongestionLevel(congestionLevel);
+                    dto.setRecommendTransit("HIGH".equals(congestionLevel));
+                }
+            });
+        }
 
         // 3. parking_static → DTO 변환 (has_realtime=false인 것만)
         List<ParkingListItemDto> staticResults = staticList.stream()
@@ -110,11 +126,16 @@ public class ParkingService {
                         .wdOperEndTm(convertOperTime(p.getWdOperEndTm()))
                         .weOperBgngTm(convertOperTime(p.getSatOperBgngTm()))
                         .weOperEndTm(convertOperTime(p.getSatOperEndTm()))
-                        .distanceM(calcDistance(request.getLat(), request.getLng(), p.getLat(), p.getLng())) // ← 수정
+                        .distanceM(calcDistance(request.getLat(), request.getLng(), p.getLat(), p.getLng()))
                         .hasRealtime(false)
                         .remaining(null)
                         .isFull(null)
                         .nowPrkVhclCnt(null)
+                        .avgRating(reviewRepository.findAvgRatingByPkltCd(
+                                p.getPkltCd() != null ? p.getPkltCd() : "static_" + p.getId()) != null
+                                ? Math.round(reviewRepository.findAvgRatingByPkltCd(
+                                p.getPkltCd() != null ? p.getPkltCd() : "static_" + p.getId()) * 10) / 10.0
+                                : 0.0)
                         .build())
                 .collect(Collectors.toList());
 
@@ -135,7 +156,7 @@ public class ParkingService {
     }
 
     // 주차장 상세 정보 조회 (기능 3)
-    public ParkingDetailResponse getDetail(String pkltCd) {
+    public ParkingDetailResponse getDetail(String pkltCd, Double lat, Double lng) {
 
         // static_ 접두사면 parking_static에서 조회
         if (pkltCd.startsWith("static_")) {
@@ -157,10 +178,27 @@ public class ParkingService {
                             .remaining(null)
                             .isFull(null)
                             .nowPrkVhclCnt(null)
+                            .distanceM(lat != null && lng != null
+                                    ? calcDistance(lat, lng, p.getLat(), p.getLng())
+                                    : null)
                             .congestion(ParkingDetailResponse.CongestionInfo.builder()
                                     .currentRate(0)
                                     .hourly(new ArrayList<>(java.util.Collections.nCopies(24, 0)))
                                     .build())
+                            .avgRating(reviewRepository.findAvgRatingByPkltCd(pkltCd) != null
+                                    ? Math.round(reviewRepository.findAvgRatingByPkltCd(pkltCd) * 10) / 10.0
+                                    : 0.0)
+                            .reviewCount(reviewRepository.countByPkltCd(pkltCd))
+                            .recentReviews(reviewRepository.findByPkltCdOrderByCreatedAtDesc(pkltCd)
+                                    .stream().limit(3)
+                                    .map(r -> ReviewResponse.builder()
+                                            .id(r.getId())
+                                            .nickname(r.getNickname())
+                                            .rating(r.getRating())
+                                            .content(r.getContent())
+                                            .createdAt(r.getCreatedAt())
+                                            .build())
+                                    .collect(Collectors.toList()))
                             .build())
                     .orElseThrow(() -> new ParkingException(ErrorCode.PARKING_NOT_FOUND));
         }
@@ -179,12 +217,15 @@ public class ParkingService {
                     List<Object[]> avgRows = parkingRealtimeRepository
                             .findAvgByDayOfWeekAndHour(pkltCd, todayForDayOfWeek);
 
-                    // 시간대별 평균 잔여 공간 매핑
+                    // 시간대별 혼잡도 매핑
                     int[] hourlyAvg = new int[24];
                     for (Object[] row : avgRows) {
                         int hour = ((Number) row[0]).intValue();
                         int avg = ((Number) row[1]).intValue();
-                        hourlyAvg[hour] = avg;
+                        int congestionRate = info.getTpkct() != null && info.getTpkct() > 0
+                                ? (int) ((1.0 - (double) avg / info.getTpkct()) * 100)
+                                : 0;
+                        hourlyAvg[hour] = congestionRate;
                     }
                     List<Integer> hourlyList = new ArrayList<>();
                     for (int i = 0; i < 24; i++) {
@@ -197,6 +238,21 @@ public class ParkingService {
                             && latest.getNowPrkVhclCnt() != null) {
                         currentRate = (int) ((double) latest.getNowPrkVhclCnt() / info.getTpkct() * 100);
                     }
+
+                    // 리뷰 데이터
+                    Double avgRating = reviewRepository.findAvgRatingByPkltCd(pkltCd);
+                    Long reviewCount = reviewRepository.countByPkltCd(pkltCd);
+                    List<ReviewResponse> recentReviews = reviewRepository
+                            .findByPkltCdOrderByCreatedAtDesc(pkltCd)
+                            .stream().limit(3)
+                            .map(r -> ReviewResponse.builder()
+                                    .id(r.getId())
+                                    .nickname(r.getNickname())
+                                    .rating(r.getRating())
+                                    .content(r.getContent())
+                                    .createdAt(r.getCreatedAt())
+                                    .build())
+                            .collect(Collectors.toList());
 
                     return ParkingDetailResponse.builder()
                             .pkltCd(info.getPkltCd())
@@ -211,6 +267,9 @@ public class ParkingService {
                             .wdOperEndTm(info.getWdOperEndTm())
                             .weOperBgngTm(info.getWeOperBgngTm())
                             .weOperEndTm(info.getWeOperEndTm())
+                            .distanceM(lat != null && lng != null
+                                    ? calcDistance(lat, lng, info.getLat(), info.getLng())
+                                    : null)
                             .remaining(latest != null ? latest.getRemaining() : null)
                             .isFull(latest != null ? latest.getIsFull() : null)
                             .nowPrkVhclCnt(latest != null ? latest.getNowPrkVhclCnt() : null)
@@ -218,6 +277,9 @@ public class ParkingService {
                                     .currentRate(currentRate)
                                     .hourly(hourlyList)
                                     .build())
+                            .avgRating(avgRating != null ? Math.round(avgRating * 10) / 10.0 : 0.0)
+                            .reviewCount(reviewCount)
+                            .recentReviews(recentReviews)
                             .build();
                 })
                 .orElseThrow(() -> new ParkingException(ErrorCode.PARKING_NOT_FOUND));
@@ -289,7 +351,7 @@ public class ParkingService {
 
             return String.format("%02d%02d", hour, minute);
         } catch (Exception e) {
-            return time; // 변환 실패시 원본 반환
+            return time;
         }
     }
 

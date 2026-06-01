@@ -7,8 +7,10 @@ package com.parking.dto.response;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
+@Setter
 @Builder
 public class ParkingListItemDto {
 
@@ -40,5 +42,7 @@ public class ParkingListItemDto {
     private Integer predictedRemaining;  // 예측 잔여 공간
     private String congestionLevel;      // LOW / MEDIUM / HIGH / UNKNOWN
     private Boolean recommendTransit;    // 대중교통 권장 여부
+
+    private Double avgRating;  // 평균 평점
 
 }

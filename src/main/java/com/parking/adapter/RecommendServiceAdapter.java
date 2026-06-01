@@ -1,28 +1,37 @@
 package com.parking.adapter;
 
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.List;
+import java.util.Map;
 
-/**
- * AI 대체 주차장 추천 서버 연동 어댑터
- * 기능 5 · AI 모델 연결 시 여기 구현
- *
- * 요청 : lat, lng, arrivalTime, excludePkltCds
- * 응답 : pkltCd + recommendScore 목록
- */
 @Component
+@RequiredArgsConstructor
 public class RecommendServiceAdapter {
 
-    // TODO: AI 서버 URL 주입
-    // @Value("${api.recommend.url}")
-    // private String recommendServiceUrl;
+    private final WebClient webClient;
 
-    public List<Object> requestRecommendation(
-            Double lat, Double lng,
-            String arrivalTime,
-            List<String> excludePkltCds) {
-        // TODO: AI 모델 연결 후 구현
-        return null;
+    @Value("${api.predict.url}")
+    private String predictUrl;
+
+    public List<Map<String, Object>> requestRecommend(
+            Double lat, Double lng, String arrivalTime, List<String> excludePkltCds) {
+        return webClient.post()
+                .uri(predictUrl + "/api/v1/parking/recommend")
+                .bodyValue(Map.of(
+                        "lat", lat,
+                        "lng", lng,
+                        "arrivalTime", arrivalTime,
+                        "excludePkltCds", excludePkltCds
+                ))
+                .retrieve()
+                .bodyToFlux(Map.class)
+                .cast(Map.class)
+                .map(m -> (Map<String, Object>) m)
+                .collectList()
+                .block();
     }
 }

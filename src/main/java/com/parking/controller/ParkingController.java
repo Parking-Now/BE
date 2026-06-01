@@ -37,10 +37,12 @@ public class ParkingController {
     // 주차장 상세 조회 (기능 3)
     @GetMapping("/{pkltCd}")
     public ResponseEntity<ApiResponse<ParkingDetailResponse>> getDetail(
-            @PathVariable String pkltCd
+            @PathVariable String pkltCd,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng
     ) {
         return ResponseEntity.ok(
-                ApiResponse.ok(parkingService.getDetail(pkltCd))
+                ApiResponse.ok(parkingService.getDetail(pkltCd, lat, lng))
         );
     }
 }
