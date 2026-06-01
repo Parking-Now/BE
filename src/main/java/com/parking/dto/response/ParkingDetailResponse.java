@@ -25,6 +25,8 @@ public class ParkingDetailResponse {
     private Integer addPrkCrg;      // 추가 요금
     private Double distanceM;  // 목적지로부터 거리 (m)
 
+    private Boolean cardYn;  // 카드결제 가능 여부
+
     // 운영 시간
     private String  wdOperBgngTm;
     private String  wdOperEndTm;

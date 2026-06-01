@@ -66,4 +66,7 @@ public class ParkingStatic {
 
     @Column(name = "pklt_cd")
     private String pkltCd;
+
+    @Column(name = "card_yn")
+    private Boolean cardYn;
 }
