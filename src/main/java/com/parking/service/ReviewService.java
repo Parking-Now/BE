@@ -25,7 +25,7 @@ public class ReviewService {
                 .nickname("user_" + (1000 + new Random().nextInt(9000)))
                 .rating(request.getRating())
                 .content(request.getContent())
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul")))
                 .build();
         reviewRepository.save(review);
     }

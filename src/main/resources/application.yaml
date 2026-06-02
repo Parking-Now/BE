@@ -12,6 +12,7 @@ spring:
     show-sql: true
   jackson:
     default-property-inclusion: always
+    time-zone: Asia/Seoul
 
 server:
   port: 8080

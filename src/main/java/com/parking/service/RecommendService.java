@@ -24,7 +24,7 @@ public class RecommendService {
     private final RecommendServiceAdapter recommendServiceAdapter;
 
     private static final double WALKING_SPEED = 67.0;
-    private static final int[] RADIUS_STEPS = {500, 1000, 2000};
+    private static final int[] RADIUS_STEPS = {700, 1500, 2500};
 
     // 대체 주차장 추천 (기능 5)
     public RecommendResponse getAlternatives(RecommendRequest request) {
