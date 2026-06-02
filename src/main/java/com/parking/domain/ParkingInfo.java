@@ -1,3 +1,4 @@
+// 삭제 가능
 package com.parking.domain;
 
 import jakarta.persistence.*;

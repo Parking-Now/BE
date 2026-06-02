@@ -1,14 +1,14 @@
 package com.parking.service;
 
 import com.parking.adapter.RecommendServiceAdapter;
-import com.parking.domain.ParkingInfo;
 import com.parking.domain.ParkingRealtime;
+import com.parking.domain.ParkingStatic;
 import com.parking.dto.request.RecommendRequest;
 import com.parking.dto.response.RecommendResponse;
 import com.parking.exception.ErrorCode;
 import com.parking.exception.ParkingException;
-import com.parking.repository.ParkingInfoRepository;
 import com.parking.repository.ParkingRealtimeRepository;
+import com.parking.repository.ParkingStaticRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecommendService {
 
-    private final ParkingInfoRepository parkingInfoRepository;
+    private final ParkingStaticRepository parkingStaticRepository;
     private final ParkingRealtimeRepository parkingRealtimeRepository;
     private final RecommendServiceAdapter recommendServiceAdapter;
 
@@ -48,7 +48,7 @@ public class RecommendService {
                     String pkltCd = (String) result.get("pkltCd");
                     Integer recommendScore = (Integer) result.get("recommendScore");
 
-                    return parkingInfoRepository.findByPkltCd(pkltCd).map(info -> {
+                    return parkingStaticRepository.findByPkltCd(pkltCd).map(p -> {
                         Optional<ParkingRealtime> latest = parkingRealtimeRepository
                                 .findTopByPkltCdOrderByCollectedAtDesc(pkltCd);
 
@@ -56,18 +56,18 @@ public class RecommendService {
                                 ? r.getRemaining() : 0).orElse(0);
                         double distanceM = calcDistance(
                                 request.getLat(), request.getLng(),
-                                info.getLat(), info.getLng());
+                                p.getLat(), p.getLng());
                         int walkingMinutes = (int) Math.ceil(distanceM / WALKING_SPEED);
 
                         return RecommendResponse.AlternativeItem.builder()
                                 .pkltCd(pkltCd)
-                                .name(info.getPkltNm())
+                                .name(p.getFcltyNm())
                                 .distanceM(distanceM)
                                 .walkingMinutes(walkingMinutes)
                                 .remaining(remaining)
-                                .bscPrkCrg(info.getBscPrkCrg())
+                                .bscPrkCrg(p.getBscPrkCrg())
                                 .recommendScore(recommendScore)
-                                .reason(buildReason(remaining, walkingMinutes, info.getBscPrkCrg()))
+                                .reason(buildReason(remaining, walkingMinutes, p.getBscPrkCrg()))
                                 .build();
                     }).orElse(null);
                 })

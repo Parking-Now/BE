@@ -40,7 +40,8 @@ public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, In
                    + sin(radians(:lat)) * sin(radians(lat))
                )) AS distance
         FROM parking_static
-        WHERE pklt_cd NOT IN (:excludePkltCds)
+        WHERE has_realtime = true
+          AND pklt_cd NOT IN (:excludePkltCds)
           AND (6371000 * acos(
                    cos(radians(:lat)) * cos(radians(lat))
                    * cos(radians(lng) - radians(:lng))

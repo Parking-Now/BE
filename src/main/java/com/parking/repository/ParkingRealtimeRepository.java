@@ -19,14 +19,14 @@ public interface ParkingRealtimeRepository extends JpaRepository<ParkingRealtime
             LocalDateTime since
     );
 
-    // 예측용 - 과거 동일 요일 · 시간대 평균 잔여율
+    // 예측용 - 과거 동일 요일 · 시간대 평균 잔여율 (일단 과거 2주 데이터 활용)
     @Query(value = """
         SELECT EXTRACT(HOUR FROM collected_at) AS hour,
                ROUND(AVG(remaining))           AS avg_remaining
         FROM parking_realtime
         WHERE pklt_cd = :pkltCd
           AND EXTRACT(DOW FROM collected_at) = EXTRACT(DOW FROM CAST(:arrivalTime AS timestamp))
-          AND collected_at >= now() - INTERVAL '5 weeks'
+          AND collected_at >= now() - INTERVAL '2 weeks'
         GROUP BY hour
         ORDER BY hour
         """, nativeQuery = true)

@@ -2,14 +2,10 @@ package com.parking.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.AccessLevel;
 
 @Entity
-@Table(name = "parking_static",
-        indexes = @Index(name = "idx_parking_static_location", columnList = "lat, lng"))
+@Table(name = "parking_static")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ParkingStatic {
 
     @Id
