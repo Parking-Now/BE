@@ -1,14 +1,18 @@
 package com.parking.adapter;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RecommendServiceAdapter {
@@ -37,6 +41,10 @@ public class RecommendServiceAdapter {
                 .cast(Map.class)
                 .map(m -> (Map<String, Object>) m)
                 .collectList()
+                .onErrorResume(e -> {
+                    log.error("추천 서버 호출 실패 [url={}, lat={}, lng={}]: {}", predictUrl, lat, lng, e.getMessage(), e);
+                    return Mono.just(Collections.emptyList());
+                })
                 .block();
     }
 }
