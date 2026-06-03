@@ -14,6 +14,7 @@ import com.parking.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import com.parking.domain.ParkingRealtime;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,7 +35,33 @@ public class ParkingService {
         List<ParkingStatic> staticList = parkingStaticRepository.findWithinRadius(
                 request.getLat(), request.getLng(), request.getRadius());
 
-        // 2. DTO 변환
+        if (staticList.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 실시간 데이터 일괄 조회 → Map으로 변환 (N+1 방지)
+        List<String> realtimePkltCds = staticList.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getHasRealtime()) && p.getPkltCd() != null)
+                .map(ParkingStatic::getPkltCd)
+                .collect(Collectors.toList());
+
+        Map<String, ParkingRealtime> realtimeMap = realtimePkltCds.isEmpty()
+                ? Collections.emptyMap()
+                : parkingRealtimeRepository.findLatestByPkltCds(realtimePkltCds).stream()
+                        .collect(Collectors.toMap(ParkingRealtime::getPkltCd, rt -> rt));
+
+        // 3. 평균 평점 일괄 조회 → Map으로 변환 (N+1 방지)
+        List<String> allPkltCds = staticList.stream()
+                .map(p -> p.getPkltCd() != null ? p.getPkltCd() : "static_" + p.getId())
+                .collect(Collectors.toList());
+
+        Map<String, Double> avgRatingMap = reviewRepository.findAvgRatingsByPkltCds(allPkltCds).stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> ((Number) row[1]).doubleValue()
+                ));
+
+        // 4. DTO 변환 (DB 조회 없이 Map 룩업)
         List<ParkingListItemDto> results = staticList.stream().map(p -> {
 
             String pkltCd = p.getPkltCd() != null ? p.getPkltCd() : "static_" + p.getId();
@@ -59,18 +86,16 @@ public class ParkingService {
                     .hasRealtime(p.getHasRealtime())
                     .cardYn(p.getCardYn());
 
-            // has_realtime=true면 실시간 데이터 붙이기
-            if (Boolean.TRUE.equals(p.getHasRealtime()) && p.getPkltCd() != null) {
-                parkingRealtimeRepository
-                        .findTopByPkltCdOrderByCollectedAtDesc(p.getPkltCd())
-                        .ifPresent(rt -> builder
-                                .remaining(rt.getRemaining())
-                                .isFull(rt.getIsFull())
-                                .nowPrkVhclCnt(rt.getNowPrkVhclCnt()));
+            // 실시간 데이터 붙이기 (Map 룩업)
+            ParkingRealtime rt = realtimeMap.get(p.getPkltCd());
+            if (rt != null) {
+                builder.remaining(rt.getRemaining())
+                        .isFull(rt.getIsFull())
+                        .nowPrkVhclCnt(rt.getNowPrkVhclCnt());
             }
 
-            // 평균 평점 붙이기
-            Double avg = reviewRepository.findAvgRatingByPkltCd(pkltCd);
+            // 평균 평점 붙이기 (Map 룩업)
+            Double avg = avgRatingMap.get(pkltCd);
             builder.avgRating(avg != null ? Math.round(avg * 10) / 10.0 : 0.0);
 
             return builder.build();

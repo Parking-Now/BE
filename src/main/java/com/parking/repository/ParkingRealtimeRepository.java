@@ -19,6 +19,15 @@ public interface ParkingRealtimeRepository extends JpaRepository<ParkingRealtime
             LocalDateTime since
     );
 
+    // pkltCd 목록에 대해 각각 최신 1건씩 일괄 조회 (N+1 방지)
+    @Query(value = """
+        SELECT DISTINCT ON (pklt_cd) *
+        FROM parking_realtime
+        WHERE pklt_cd IN (:pkltCds)
+        ORDER BY pklt_cd, collected_at DESC
+        """, nativeQuery = true)
+    List<ParkingRealtime> findLatestByPkltCds(@Param("pkltCds") List<String> pkltCds);
+
     // 예측용 - 과거 동일 요일 · 시간대 평균 잔여율 (일단 과거 2주 데이터 활용)
     @Query(value = """
         SELECT EXTRACT(HOUR FROM collected_at) AS hour,
