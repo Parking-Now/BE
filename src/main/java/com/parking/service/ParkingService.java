@@ -70,9 +70,8 @@ public class ParkingService {
             }
 
             // 평균 평점 붙이기
-            builder.avgRating(reviewRepository.findAvgRatingByPkltCd(pkltCd) != null
-                    ? Math.round(reviewRepository.findAvgRatingByPkltCd(pkltCd) * 10) / 10.0
-                    : 0.0);
+            Double avg = reviewRepository.findAvgRatingByPkltCd(pkltCd);
+            builder.avgRating(avg != null ? Math.round(avg * 10) / 10.0 : 0.0);
 
             return builder.build();
         }).collect(Collectors.toList());
@@ -91,7 +90,8 @@ public class ParkingService {
                 Map<String, Map<String, Object>> predictionMap = predictions.stream()
                         .collect(Collectors.toMap(
                                 p -> (String) p.get("pkltCd"),
-                                p -> p
+                                p -> p,
+                                (existing, replacement) -> replacement
                         ));
 
                 results.forEach(dto -> {
