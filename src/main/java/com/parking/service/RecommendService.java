@@ -57,7 +57,8 @@ public class RecommendService {
                         double distanceM = calcDistance(
                                 request.getLat(), request.getLng(),
                                 p.getLat(), p.getLng());
-                        int walkingMinutes = (int) Math.ceil(distanceM / WALKING_SPEED);
+                        double actualDistance = distanceM * 1.3;
+                        int walkingMinutes = (int) Math.ceil(actualDistance / WALKING_SPEED);
 
                         return RecommendResponse.AlternativeItem.builder()
                                 .pkltCd(pkltCd)
