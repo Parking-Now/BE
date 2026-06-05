@@ -18,7 +18,9 @@ public class ParkingDetailResponse {
     private Integer bscPrkCrg;      // 기본 요금
     private Integer bscPrkHr;       // 기본 요금 적용 시간 (분)
     private Double  distanceM;      // 목적지로부터 거리 (m)
-    private Boolean cardYn;         // 카드결제 가능 여부
+    private Boolean cardYn;          // 카드결제 가능 여부
+    private Boolean evChargingYn;    // 전기차 충전소 여부
+    private Boolean disabledYn;      // 장애인 주차 구역 여부
 
     // 운영 시간
     private String wdOperBgngTm;    // 평일 운영 시작

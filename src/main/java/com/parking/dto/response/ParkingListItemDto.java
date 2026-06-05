@@ -26,6 +26,8 @@ public class ParkingListItemDto {
     private Integer bscPrkHr;
     private Boolean hasRealtime;
     private Boolean cardYn;
+    private Boolean evChargingYn;
+    private Boolean disabledYn;
 
     // 운영 시간
     private String wdOperBgngTm;    // 평일 시작

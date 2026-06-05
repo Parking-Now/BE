@@ -90,7 +90,9 @@ public class ParkingService {
                     .sunOperEndTm(convertOperTime(p.getSunOperEndTm()))
                     .distanceM(calcDistance(request.getLat(), request.getLng(), p.getLat(), p.getLng()))
                     .hasRealtime(p.getHasRealtime())
-                    .cardYn(p.getCardYn());
+                    .cardYn(p.getCardYn())
+                    .evChargingYn(p.getEvChargingYn())
+                    .disabledYn(p.getDisabledYn());
 
             // 실시간 데이터 붙이기 (Map 룩업)
             ParkingRealtime rt = realtimeMap.get(p.getPkltCd());
@@ -222,6 +224,8 @@ public class ParkingService {
                 .bscPrkCrg(parking.getBscPrkCrg())
                 .bscPrkHr(parking.getBscPrkHr())
                 .cardYn(parking.getCardYn())
+                .evChargingYn(parking.getEvChargingYn())
+                .disabledYn(parking.getDisabledYn())
                 .wdOperBgngTm(convertOperTime(parking.getWdOperBgngTm()))
                 .wdOperEndTm(convertOperTime(parking.getWdOperEndTm()))
                 .satOperBgngTm(convertOperTime(parking.getSatOperBgngTm()))

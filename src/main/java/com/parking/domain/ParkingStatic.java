@@ -65,4 +65,10 @@ public class ParkingStatic {
 
     @Column(name = "card_yn")
     private Boolean cardYn;
+
+    @Column(name = "ev_charging_yn")
+    private Boolean evChargingYn;
+
+    @Column(name = "disabled_yn")
+    private Boolean disabledYn;
 }
