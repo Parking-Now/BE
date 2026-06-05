@@ -31,6 +31,7 @@ public class ParkingDetailResponse {
     private String sunOperEndTm;    // 일요일 운영 종료
 
     // 실시간
+    private Boolean hasRealtime;
     private Integer remaining;
     private Boolean isFull;
     private Integer nowPrkVhclCnt;

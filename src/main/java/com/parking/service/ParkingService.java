@@ -235,6 +235,7 @@ public class ParkingService {
                 .distanceM(lat != null && lng != null
                         ? calcDistance(lat, lng, parking.getLat(), parking.getLng())
                         : null)
+                .hasRealtime(parking.getHasRealtime())
                 .remaining(latest != null ? latest.getRemaining() : null)
                 .isFull(latest != null ? latest.getIsFull() : null)
                 .nowPrkVhclCnt(latest != null ? latest.getNowPrkVhclCnt() : null)
