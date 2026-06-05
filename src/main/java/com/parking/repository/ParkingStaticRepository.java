@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, Integer> {
 
-    // 좌표 반경 내 주차장 검색
+    // 좌표 반경 내 주차장 검색 (바운딩 박스 인덱스 선필터 → Haversine 정밀 필터)
     @Query(value = """
         SELECT *,
                (6371000 * acos(
@@ -18,7 +18,9 @@ public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, In
                    + sin(radians(:lat)) * sin(radians(lat))
                )) AS distance
         FROM parking_static
-        WHERE (6371000 * acos(
+        WHERE lat BETWEEN :minLat AND :maxLat
+          AND lng BETWEEN :minLng AND :maxLng
+          AND (6371000 * acos(
                    cos(radians(:lat)) * cos(radians(lat))
                    * cos(radians(lng) - radians(:lng))
                    + sin(radians(:lat)) * sin(radians(lat))
@@ -28,10 +30,14 @@ public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, In
     List<ParkingStatic> findWithinRadius(
             @Param("lat") Double lat,
             @Param("lng") Double lng,
-            @Param("radiusM") Integer radiusM
+            @Param("radiusM") Integer radiusM,
+            @Param("minLat") Double minLat,
+            @Param("maxLat") Double maxLat,
+            @Param("minLng") Double minLng,
+            @Param("maxLng") Double maxLng
     );
 
-    // 대체 추천용 - 제외 목록 빼고 반경 내 조회
+    // 대체 추천용 - 제외 목록 빼고 반경 내 조회 (바운딩 박스 인덱스 선필터 → Haversine 정밀 필터)
     @Query(value = """
         SELECT *,
                (6371000 * acos(
@@ -42,6 +48,8 @@ public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, In
         FROM parking_static
         WHERE has_realtime = true
           AND pklt_cd NOT IN (:excludePkltCds)
+          AND lat BETWEEN :minLat AND :maxLat
+          AND lng BETWEEN :minLng AND :maxLng
           AND (6371000 * acos(
                    cos(radians(:lat)) * cos(radians(lat))
                    * cos(radians(lng) - radians(:lng))
@@ -53,7 +61,11 @@ public interface ParkingStaticRepository extends JpaRepository<ParkingStatic, In
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radiusM") Integer radiusM,
-            @Param("excludePkltCds") List<String> excludePkltCds
+            @Param("excludePkltCds") List<String> excludePkltCds,
+            @Param("minLat") Double minLat,
+            @Param("maxLat") Double maxLat,
+            @Param("minLng") Double minLng,
+            @Param("maxLng") Double maxLng
     );
 
     Optional<ParkingStatic> findByPkltCd(String pkltCd);

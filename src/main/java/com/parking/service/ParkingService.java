@@ -32,8 +32,14 @@ public class ParkingService {
     public List<ParkingListItemDto> searchParking(ParkingSearchRequest request) {
 
         // 1. parking_static에서 반경 내 전체 주차장 조회
+        // 바운딩 박스(사각형)로 인덱스 선필터 후 Haversine 정밀 필터
+        double latDelta = request.getRadius() / 111_000.0;
+        double lngDelta = request.getRadius() / (111_000.0 * Math.cos(Math.toRadians(request.getLat())));
+
         List<ParkingStatic> staticList = parkingStaticRepository.findWithinRadius(
-                request.getLat(), request.getLng(), request.getRadius());
+                request.getLat(), request.getLng(), request.getRadius(),
+                request.getLat() - latDelta, request.getLat() + latDelta,
+                request.getLng() - lngDelta, request.getLng() + lngDelta);
 
         if (staticList.isEmpty()) {
             return Collections.emptyList();
