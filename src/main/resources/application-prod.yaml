@@ -7,3 +7,7 @@ spring:
 api:
   predict:
     url: ${PREDICT_SERVICE_URL}
+
+google:
+  places:
+    api-key: ${GOOGLE_PLACES_API_KEY}

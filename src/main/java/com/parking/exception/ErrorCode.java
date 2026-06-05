@@ -12,6 +12,9 @@ public enum ErrorCode {
     PARKING_NOT_FOUND("P001", "해당 주차장을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     NO_ALTERNATIVES("P002", "주변에 주차 가능한 주차장이 없습니다.", HttpStatus.NOT_FOUND),
 
+    // 장소
+    PLACE_NOT_FOUND("P003", "해당 장소를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+
     // 요청
     INVALID_PARAMS("C001", "요청 파라미터가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_LOCATION("C002", "유효하지 않은 좌표값입니다.", HttpStatus.BAD_REQUEST),
