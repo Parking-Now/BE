@@ -1,21 +1,27 @@
 package com.parking.service;
 
 import com.parking.adapter.PredictServiceAdapter;
+import com.parking.domain.CitydataRealtime;
+import com.parking.domain.Hotspot;
+import com.parking.domain.ParkingRealtime;
 import com.parking.domain.ParkingStatic;
 import com.parking.dto.request.ParkingSearchRequest;
 import com.parking.dto.response.ParkingDetailResponse;
 import com.parking.dto.response.ParkingListItemDto;
+import com.parking.dto.response.ParkingSearchResponse;
 import com.parking.dto.response.ReviewResponse;
 import com.parking.exception.ErrorCode;
 import com.parking.exception.ParkingException;
+import com.parking.repository.CitydataRealtimeRepository;
+import com.parking.repository.HotspotRepository;
 import com.parking.repository.ParkingRealtimeRepository;
 import com.parking.repository.ParkingStaticRepository;
 import com.parking.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import com.parking.domain.ParkingRealtime;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,9 +33,11 @@ public class ParkingService {
     private final ParkingStaticRepository parkingStaticRepository;
     private final ReviewRepository reviewRepository;
     private final PredictServiceAdapter predictServiceAdapter;
+    private final HotspotRepository hotspotRepository;
+    private final CitydataRealtimeRepository citydataRealtimeRepository;
 
     // 목적지 주변 주차장 검색 (기능 1·2)
-    public List<ParkingListItemDto> searchParking(ParkingSearchRequest request) {
+    public ParkingSearchResponse searchParking(ParkingSearchRequest request) {
 
         // 1. parking_static에서 반경 내 전체 주차장 조회
         // 바운딩 박스(사각형)로 인덱스 선필터 후 Haversine 정밀 필터
@@ -42,7 +50,10 @@ public class ParkingService {
                 request.getLng() - lngDelta, request.getLng() + lngDelta);
 
         if (staticList.isEmpty()) {
-            return Collections.emptyList();
+            return ParkingSearchResponse.builder()
+                    .recommendTransit(false)
+                    .parkingList(Collections.emptyList())
+                    .build();
         }
 
         // 2. 실시간 데이터 일괄 조회 → Map으로 변환 (N+1 방지)
@@ -148,7 +159,64 @@ public class ParkingService {
         }
 
         // 정렬
-        return sortParking(results, request.getSort());
+        List<ParkingListItemDto> sorted = sortParking(results, request.getSort());
+
+        boolean recommendTransit = determineRecommendTransit(request, sorted);
+
+        return ParkingSearchResponse.builder()
+                .recommendTransit(recommendTransit)
+                .parkingList(sorted)
+                .build();
+    }
+
+    private boolean determineRecommendTransit(ParkingSearchRequest request, List<ParkingListItemDto> results) {
+        double delta1km = 1000.0 / 111_000.0;
+        double lngDelta1km = 1000.0 / (111_000.0 * Math.cos(Math.toRadians(request.getLat())));
+
+        Optional<Hotspot> hotspotOpt = hotspotRepository.findNearestWithin1km(
+                request.getLat(), request.getLng(),
+                request.getLat() - delta1km, request.getLat() + delta1km,
+                request.getLng() - lngDelta1km, request.getLng() + lngDelta1km);
+
+        if (hotspotOpt.isPresent()) {
+            String areaCd = hotspotOpt.get().getAreaCd();
+            LocalDateTime arrivalTime = request.getArrivalTime() != null
+                    ? LocalDateTime.parse(request.getArrivalTime())
+                    : null;
+
+            if (arrivalTime == null) {
+                return citydataRealtimeRepository.findLatestByAreaCd(areaCd)
+                        .map(r -> isCongested(r.getFcstCongestLvl()))
+                        .orElse(false);
+            }
+
+            long hoursUntil = ChronoUnit.HOURS.between(LocalDateTime.now(), arrivalTime);
+
+            if (hoursUntil <= 12) {
+                return citydataRealtimeRepository.findNearestToTime(areaCd, arrivalTime)
+                        .map(r -> isCongested(r.getFcstCongestLvl()))
+                        .orElse(false);
+            } else {
+                List<CitydataRealtime> historical = citydataRealtimeRepository
+                        .findByAreaCdAndDayOfWeekAndHour(areaCd, arrivalTime);
+                if (historical.isEmpty()) return false;
+                long congestedCount = historical.stream()
+                        .filter(r -> isCongested(r.getFcstCongestLvl()))
+                        .count();
+                return (double) congestedCount / historical.size() >= 0.5;
+            }
+        }
+
+        // fallback: 절반 이상 HIGH면 true
+        if (results.isEmpty()) return false;
+        long highCount = results.stream()
+                .filter(dto -> "HIGH".equals(dto.getCongestionLevel()))
+                .count();
+        return (double) highCount / results.size() >= 0.5;
+    }
+
+    private boolean isCongested(String level) {
+        return "붐빔".equals(level);
     }
 
     // 주차장 상세 정보 조회 (기능 3)

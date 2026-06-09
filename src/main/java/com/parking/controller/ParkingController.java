@@ -8,14 +8,12 @@ package com.parking.controller;
 import com.parking.dto.request.ParkingSearchRequest;
 import com.parking.dto.response.ApiResponse;
 import com.parking.dto.response.ParkingDetailResponse;
-import com.parking.dto.response.ParkingListItemDto;
+import com.parking.dto.response.ParkingSearchResponse;
 import com.parking.service.ParkingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/parking")
@@ -26,7 +24,7 @@ public class ParkingController {
 
     // 목적지 주변 주차장 검색 (기능 1·2)
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<ParkingListItemDto>>> searchParking(
+    public ResponseEntity<ApiResponse<ParkingSearchResponse>> searchParking(
             @Valid ParkingSearchRequest request
     ) {
         return ResponseEntity.ok(
