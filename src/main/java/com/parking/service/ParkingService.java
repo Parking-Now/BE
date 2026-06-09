@@ -274,7 +274,7 @@ public class ParkingService {
                             if (dto.getIsFull() == null) return 1;
                             return 2;
                         })
-                        .thenComparingInt(dto -> calcSearchScore(dto)))
+                        .thenComparingInt(dto -> -calcSearchScore(dto)))
                 .collect(Collectors.toList());
     }
 
