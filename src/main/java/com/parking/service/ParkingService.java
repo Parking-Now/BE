@@ -120,14 +120,6 @@ public class ParkingService {
             return builder.build();
         }).collect(Collectors.toList());
 
-        // TODO(임시-발표테스트): pkltCd 1366593 만차 강제 처리 — 발표 후 삭제
-        results.stream()
-                .filter(dto -> "1366593".equals(dto.getPkltCd()))
-                .forEach(dto -> {
-                    dto.setIsFull(true);
-                    dto.setRemaining(0);
-                });
-
         // AI 서버 호출해서 예측값 붙이기
         if (request.getArrivalTime() != null) {
             List<String> pkltCds = staticList.stream()
@@ -292,13 +284,8 @@ public class ParkingService {
                         .build())
                 .collect(Collectors.toList());
 
-        // TODO(임시-발표테스트): pkltCd 1366593 만차 강제 처리 — 발표 후 삭제
         Integer detailRemaining = latest != null ? latest.getRemaining() : null;
         Boolean detailIsFull = latest != null ? latest.getIsFull() : null;
-        if ("1366593".equals(resolvedPkltCd)) {
-            detailRemaining = 0;
-            detailIsFull = true;
-        }
 
         return ParkingDetailResponse.builder()
                 .pkltCd(resolvedPkltCd)
